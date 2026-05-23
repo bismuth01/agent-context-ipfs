@@ -85,13 +85,18 @@ export class AgentWorld extends Scene {
     });
 
     map.createLayer("Ground", tilesets, 0, 0);
-    map.createLayer("Decor", tilesets, 0, 0);
-    map.createLayer("Boundary", tilesets, 0, 0);
+    const decor_layer = map.createLayer("Decor", tilesets, 0, 0);
+    const boundary_layer = map.createLayer("Boundary", tilesets, 0, 0);
+
+    decor_layer.setCollisionByProperty({ collides: true });
+    boundary_layer.setCollisionByProperty({ collides: true });
 
     //Player physics
     this.player = this.physics.add.sprite(16 * 10, 16 * 10, "player");
     this.player.setBounce(0.0);
     this.player.setCollideWorldBounds(true);
+    this.physics.add.collider(this.player, decor_layer);
+    this.physics.add.collider(this.player, boundary_layer);
 
     // Player animations
     this.anims.create({
