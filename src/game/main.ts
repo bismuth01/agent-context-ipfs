@@ -10,6 +10,12 @@ const config: Types.Core.GameConfig = {
     width: 16 * 30,
     height: 16 * 20,
   },
+  physics: {
+    default: "arcade",
+    arcade: {
+      debug: true,
+    },
+  },
   backgroundColor: "#2b91fb",
   pixelArt: true,
   scene: [AgentWorld],
