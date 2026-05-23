@@ -87,6 +87,7 @@ export class AgentWorld extends Scene {
     map.createLayer("Ground", tilesets, 0, 0);
     const decor_layer = map.createLayer("Decor", tilesets, 0, 0);
     const boundary_layer = map.createLayer("Boundary", tilesets, 0, 0);
+    map.createLayer("NPC-tile", tilesets, 0, 0);
 
     decor_layer.setCollisionByProperty({ collides: true });
     boundary_layer.setCollisionByProperty({ collides: true });
