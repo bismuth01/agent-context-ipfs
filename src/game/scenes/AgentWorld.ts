@@ -1,4 +1,4 @@
-import { Scene, type Types } from "phaser";
+import { Scene, type Types, Physics } from "phaser";
 
 const DirectionElements = {
   up: 0,
@@ -88,16 +88,60 @@ export class AgentWorld extends Scene {
     const decor_layer = map.createLayer("Decor", tilesets, 0, 0);
     const boundary_layer = map.createLayer("Boundary", tilesets, 0, 0);
     map.createLayer("NPC-tile", tilesets, 0, 0);
+    const npc_obj_layer = map.getObjectLayer("NPC-object");
+    const player_obj_layer = map.getObjectLayer("Player-object");
 
     decor_layer.setCollisionByProperty({ collides: true });
     boundary_layer.setCollisionByProperty({ collides: true });
 
+    const agent_names = [
+      "uniswap-agent",
+      "analysis-agent",
+      "interaction-agent",
+      "todo-agent",
+    ];
+    const agent_objects: Types.Tilemaps.TiledObject[] = [];
+    agent_names.forEach((name) => {
+      const object = npc_obj_layer?.objects.find((obj) => obj.name === name);
+      if (object) {
+        agent_objects.push(object);
+      }
+    });
+    const agent_colliders = this.physics.add.staticGroup();
+    agent_objects.forEach((obj) => {
+      if (!obj) return;
+      const obj_width = obj.width ?? 0;
+      const obj_height = obj.height ?? 0;
+      const obj_x = (obj.x ?? 0) + obj_width / 2;
+      const obj_y = (obj.y ?? 0) + obj_height / 2;
+      const zone = this.add.zone(obj_x, obj_y, obj_width, obj_height);
+
+      this.physics.world.enable(zone);
+      const body = zone.body as Physics.Arcade.StaticBody;
+      body.setSize(obj_width, obj_height);
+
+      body.updateFromGameObject();
+
+      agent_colliders.add(zone);
+    });
+    const spawnPoint = player_obj_layer?.objects.find(
+      (obj) => obj.name === "spawn",
+    );
+    if (!spawnPoint) {
+      console.error("Could not find spawn point");
+    }
+
     //Player physics
-    this.player = this.physics.add.sprite(16 * 10, 16 * 10, "player");
+    this.player = this.physics.add.sprite(
+      spawnPoint?.x || 16 * 15,
+      spawnPoint?.y || 16 * 15,
+      "player",
+    );
     this.player.setBounce(0.0);
     this.player.setCollideWorldBounds(true);
     this.physics.add.collider(this.player, decor_layer);
     this.physics.add.collider(this.player, boundary_layer);
+    this.physics.add.collider(this.player, agent_colliders);
 
     // Player animations
     this.anims.create({
