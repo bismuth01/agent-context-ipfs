@@ -1,17 +1,15 @@
-import { Scene, type Types, Physics } from "phaser";
-
-const DirectionElements = {
-  up: 0,
-  down: 1,
-  left: 2,
-  right: 3,
-} as const;
-
-type Direction = (typeof DirectionElements)[keyof typeof DirectionElements];
+import { Scene, type Types } from "phaser";
+import { DirectionElements, type Direction } from "../../types/Direction";
+import { Agent } from "./utils/Agent.ts";
+import { Chatbox } from "./utils/ChatBox.ts";
 
 export class AgentWorld extends Scene {
   player: Types.Physics.Arcade.SpriteWithDynamicBody | undefined = undefined;
   cursors: Types.Input.Keyboard.CursorKeys | undefined = undefined;
+  interactKey: Phaser.Input.Keyboard.Key | undefined = undefined;
+  interactWasDown = false;
+  agents: Agent[] = [];
+  chatbox: Chatbox | undefined = undefined;
   playerDirection: Direction = DirectionElements.down;
 
   constructor() {
@@ -94,36 +92,25 @@ export class AgentWorld extends Scene {
     decor_layer.setCollisionByProperty({ collides: true });
     boundary_layer.setCollisionByProperty({ collides: true });
 
-    const agent_names = [
-      "uniswap-agent",
-      "analysis-agent",
-      "interaction-agent",
-      "todo-agent",
-    ];
-    const agent_objects: Types.Tilemaps.TiledObject[] = [];
-    agent_names.forEach((name) => {
-      const object = npc_obj_layer?.objects.find((obj) => obj.name === name);
-      if (object) {
-        agent_objects.push(object);
-      }
-    });
-    const agent_colliders = this.physics.add.staticGroup();
-    agent_objects.forEach((obj) => {
-      if (!obj) return;
-      const obj_width = obj.width ?? 0;
-      const obj_height = obj.height ?? 0;
-      const obj_x = (obj.x ?? 0) + obj_width / 2;
-      const obj_y = (obj.y ?? 0) + obj_height / 2;
-      const zone = this.add.zone(obj_x, obj_y, obj_width, obj_height);
+    this.agents = (npc_obj_layer?.objects ?? [])
+      .filter((obj) => obj.visible !== false)
+      .map((obj) => {
+        const obj_width = obj.width ?? 16;
+        const obj_height = obj.height ?? 16;
+        const obj_x = (obj.x ?? 0) + obj_width / 2;
+        const obj_y = (obj.y ?? 0) + obj_height / 2;
 
-      this.physics.world.enable(zone);
-      const body = zone.body as Physics.Arcade.StaticBody;
-      body.setSize(obj_width, obj_height);
-
-      body.updateFromGameObject();
-
-      agent_colliders.add(zone);
-    });
+        return new Agent(
+          this,
+          obj_x,
+          obj_y,
+          obj_height,
+          obj_width,
+          obj_height * 2,
+          obj_width * 2,
+          obj.name || "agent",
+        );
+      });
     const spawnPoint = player_obj_layer?.objects.find(
       (obj) => obj.name === "spawn",
     );
@@ -141,7 +128,21 @@ export class AgentWorld extends Scene {
     this.player.setCollideWorldBounds(true);
     this.physics.add.collider(this.player, decor_layer);
     this.physics.add.collider(this.player, boundary_layer);
-    this.physics.add.collider(this.player, agent_colliders);
+    const player = this.player;
+    if (!player) {
+      throw new Error("Could not find player object");
+    }
+
+    this.agents.forEach((agent) => {
+      this.physics.add.collider(player, agent.collisionZone);
+    });
+
+    this.chatbox = new Chatbox(
+      this,
+      this.scale.width / 2,
+      this.scale.height - 95,
+    );
+    this.interactKey = this.input.keyboard?.addKey("E");
 
     // Player animations
     this.anims.create({
@@ -192,46 +193,68 @@ export class AgentWorld extends Scene {
     if (!this.cursors) {
       throw new Error("Could not initialise cursors");
     }
-    if (!this.player) {
+    const player = this.player;
+    if (!player) {
       throw new Error("Could not find player object");
     }
+    if (!this.interactKey) {
+      throw new Error("Could not initialise interact key");
+    }
+
+    const interactPressed = this.interactKey.isDown && !this.interactWasDown;
+    this.interactWasDown = this.interactKey.isDown;
+
+    if (interactPressed) {
+      if (this.chatbox?.visible) {
+        this.chatbox.close();
+      } else {
+      const activeAgent = this.agents.find((agent) =>
+        agent.isInteractable(player, this.playerDirection),
+      );
+
+      if (activeAgent) {
+        this.chatbox?.open("hello");
+      }
+      }
+    }
+
     if (this.cursors.right.isDown) {
       if (this.playerDirection != DirectionElements.right) {
         this.playerDirection = DirectionElements.right;
-        this.player.setFlipX(false);
+        player.setFlipX(false);
       }
-      this.player.setVelocity(50, 0);
-      this.player.anims.play("walk-sideways", true);
+      player.setVelocity(50, 0);
+      player.anims.play("walk-sideways", true);
     } else if (this.cursors.left.isDown) {
       if (this.playerDirection != DirectionElements.left) {
         this.playerDirection = DirectionElements.left;
-        this.player.setFlipX(true);
+        player.setFlipX(true);
       }
-      this.player.setVelocity(-50, 0);
-      this.player.anims.play("walk-sideways", true);
+      player.setVelocity(-50, 0);
+      player.anims.play("walk-sideways", true);
     } else if (this.cursors.up.isDown) {
       if (this.playerDirection != DirectionElements.up) {
         this.playerDirection = DirectionElements.up;
       }
-      this.player.setVelocity(0, -50);
-      this.player.anims.play("walk-up", true);
+      player.setVelocity(0, -50);
+      player.anims.play("walk-up", true);
     } else if (this.cursors.down.isDown) {
       if (this.playerDirection != DirectionElements.down) {
         this.playerDirection = DirectionElements.down;
       }
-      this.player.setVelocity(0, 50);
+      player.setVelocity(0, 50);
     } else {
       if (
         this.playerDirection == DirectionElements.right ||
         this.playerDirection == DirectionElements.left
       ) {
-        this.player.anims.play("idle-sidways", true);
+        player.anims.play("idle-sidways", true);
       } else if (this.playerDirection == DirectionElements.up) {
-        this.player.anims.play("idle-up", true);
+        player.anims.play("idle-up", true);
       } else if (this.playerDirection == DirectionElements.down) {
-        this.player.anims.play("idle-down", true);
+        player.anims.play("idle-down", true);
       }
-      this.player.setVelocity(0, 0);
+      player.setVelocity(0, 0);
     }
   }
 }
